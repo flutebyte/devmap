@@ -17,6 +17,9 @@ const db = require("./config/database");
 db();
 
 const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => {
+    res.send('DevMap Backend Running 🚀');
+});
 
 app.listen(PORT, () =>{
     console.log(`Server is running on port ${PORT}`);
