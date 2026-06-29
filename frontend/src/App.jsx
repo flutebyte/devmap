@@ -7,6 +7,7 @@ import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Roadmap from "./pages/Roadmap";
+import Quiz from "./pages/Quiz";
 
 function App() {
   return (
@@ -31,6 +32,9 @@ function App() {
 
         {/* Dynamic Roadmap Page */}
         <Route path="/roadmap/:topic" element={<Roadmap />} />
+
+        {/* Quiz Page */}
+        <Route path="/quiz" element={<Quiz />} />
 
         {/* Fallback Route */}
         <Route path="*" element={<Navigate to="/" replace />} />

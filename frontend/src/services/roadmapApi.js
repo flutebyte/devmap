@@ -30,12 +30,10 @@ export const fetchRoadmapByTopic = async (topic, level, duration) => {
 
 export const updateRoadmapStep = async (roadmapId, step, status) => {
   const response = await fetch(
-    `${API_BASE_URL}/api/roadmaps/${roadmapId}/update-step`,
+    `${API_BASE_URL}/api/roadmaps/${roadmapId}`,
     {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ step, status })
     }
   );

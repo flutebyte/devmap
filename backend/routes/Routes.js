@@ -16,8 +16,8 @@ router.delete("/roadmaps/:id", authenticate, deleteRoadmap);
 router.post('/:id/quiz-update', authenticate, updateRoadmapFromQuiz);
 
 router.post('/quizzes', generateQuiz);
-router.post('/quizzes/:id/submit', submitQuiz);
-router.get('/quizzes/:quizId/attempt', getAttempt);
+router.post('/quizzes/:id/submit', authenticate, submitQuiz);
+router.get('/quizzes/:quizId/attempt', authenticate, getAttempt);
 
 
 module.exports = router;

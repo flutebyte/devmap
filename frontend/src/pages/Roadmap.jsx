@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   FaArrowLeft,
@@ -6,7 +6,8 @@ import {
   FaClock,
   FaTimesCircle,
   FaYoutube,
-  FaGlobe
+  FaGlobe,
+  FaQuestionCircle
 } from "react-icons/fa";
 import {
   ReactFlow,
@@ -29,6 +30,28 @@ function Roadmap() {
   const [selectedStep, setSelectedStep] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+  const loadingIntervalRef = useRef(null);
+
+  const LOADING_MESSAGES = [
+    { text: "Analyzing your topic...", sub: "Understanding the key concepts" },
+    { text: "Structuring your learning path...", sub: "Organizing topics from basics to advanced" },
+    { text: "Finding the best YouTube tutorials...", sub: "Ranking videos by engagement & quality" },
+    { text: "Curating articles & resources...", sub: "Searching across the web for you" },
+    { text: "Personalizing for your level...", sub: `Tailoring content for ${level}` },
+    { text: "Almost ready...", sub: "Putting it all together" },
+  ];
+
+  useEffect(() => {
+    if (loading) {
+      loadingIntervalRef.current = setInterval(() => {
+        setLoadingMsgIdx((i) => (i + 1) % LOADING_MESSAGES.length);
+      }, 2500);
+    } else {
+      clearInterval(loadingIntervalRef.current);
+    }
+    return () => clearInterval(loadingIntervalRef.current);
+  }, [loading]);
 
   useEffect(() => {
     const getRoadmap = async () => {
@@ -145,13 +168,35 @@ function Roadmap() {
   };
 
   if (loading) {
+    const current = LOADING_MESSAGES[loadingMsgIdx];
     return (
       <div className="min-h-screen bg-[#f7f8fc] flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-lg text-gray-500 font-medium">
-            Generating your personalized roadmap...
-          </p>
+        <div className="bg-white rounded-3xl shadow-xl p-10 max-w-md w-full text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+
+          <h2 className="text-xl font-bold text-[#12326b] mb-1 transition-all duration-500">
+            {current.text}
+          </h2>
+          <p className="text-gray-400 text-sm mb-8">{current.sub}</p>
+
+          <div className="flex justify-center gap-2 mb-6">
+            {LOADING_MESSAGES.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all duration-500 ${
+                  i === loadingMsgIdx ? "w-6 bg-blue-600" : "w-2 bg-gray-200"
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="bg-blue-50 rounded-2xl px-5 py-3">
+            <p className="text-blue-600 font-semibold text-sm">
+              {decodeURIComponent(topic)} · {level} · {duration}
+            </p>
+          </div>
+
+          <p className="text-gray-400 text-xs mt-4">This usually takes 15–30 seconds</p>
         </div>
       </div>
     );
@@ -285,6 +330,19 @@ function Roadmap() {
                         Completed
                       </button>
                     </div>
+
+                    {/* Take Quiz */}
+                    <button
+                      onClick={() =>
+                        navigate(
+                          `/quiz?topic=${encodeURIComponent(selectedStep.step)}&level=${encodeURIComponent(roadmapData.level || level)}&roadmapId=${roadmapData._id}&topicNode=${selectedStep._id || ""}`
+                        )
+                      }
+                      className="w-full px-4 py-3 rounded-xl bg-[#12326b] text-white hover:bg-[#1a4490] text-sm font-medium flex items-center justify-center gap-2 transition mb-6"
+                    >
+                      <FaQuestionCircle />
+                      Take Quiz on this Topic
+                    </button>
 
                     {/* Resources */}
                     {selectedStep.resources && selectedStep.resources.length > 0 && (

@@ -10,9 +10,9 @@ exports.generateQuiz = async (req, res) => {
     const {
       topic,
       difficulty = 'Beginner',
-      type = 'mcq',
+      type = 'Theory',
       roadmapId,
-      topicNode, 
+      topicNode,
     } = req.body;
 
     if (!topic) {
@@ -44,7 +44,7 @@ exports.generateQuiz = async (req, res) => {
 exports.submitQuiz = async (req, res) => {
   try {
     const { id: quizId } = req.params;
-    const userId = req.user._id; 
+    const userId = req.user?._id || req.user?.userId;
     const { answers = [], roadmapId, topicNode } = req.body;
 
     const quiz = await Quiz.findById(quizId);
@@ -57,7 +57,7 @@ exports.submitQuiz = async (req, res) => {
 
       const isCorrect =
         String(selectedAnswer).trim().toLowerCase() ===
-        String(question.correct_ans).trim().toLowerCase();
+        String(question.answer).trim().toLowerCase();
 
       if (isCorrect) correct++;
       return { questionIndex, selectedAnswer, isCorrect };
@@ -71,23 +71,26 @@ exports.submitQuiz = async (req, res) => {
       .filter((a) => !a.isCorrect)
       .map(({ questionIndex }) => {
         const q = quiz.questions[questionIndex];
-        return q ? q.ques : `Question ${questionIndex + 1}`;
+        return q ? (q.topic || q.question || `Question ${questionIndex + 1}`) : `Question ${questionIndex + 1}`;
       });
 
-    const attempt = await QuizAttempt.findOneAndUpdate(
-      { user: userId, quiz: quizId },
-      {
-        user: userId,
-        quiz: quizId,
-        roadmap: roadmapId || null,
-        topicNode: topicNode || null,
-        answers: gradedAnswers,
-        score,
-        weakTopics,
-        passed,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+    let attempt = null;
+    if (userId) {
+      attempt = await QuizAttempt.findOneAndUpdate(
+        { user: userId, quiz: quizId },
+        {
+          user: userId,
+          quiz: quizId,
+          roadmap: roadmapId || null,
+          topicNode: topicNode || null,
+          answers: gradedAnswers,
+          score,
+          weakTopics,
+          passed,
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
 
     if (roadmapId && topicNode) {
       await updateRoadmapNodeStatus(roadmapId, topicNode, passed);
@@ -98,7 +101,7 @@ exports.submitQuiz = async (req, res) => {
       score,
       passed,
       weakTopics,
-      attemptId: attempt._id,
+      attemptId: attempt?._id || null,
       message: passed
         ? '✅ Great job! Topic marked as complete.'
         : '🟡 Keep revising! Topic marked as needs focus.',
