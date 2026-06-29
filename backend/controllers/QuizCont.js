@@ -50,8 +50,16 @@ exports.submitQuiz = async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
 
+    const total = quiz.questions.length;
+    if (total === 0) return res.status(400).json({ message: 'Quiz has no questions' });
+
+    // Deduplicate by questionIndex — last answer wins, prevents score inflation
+    const deduped = Object.values(
+      answers.reduce((acc, a) => { acc[a.questionIndex] = a; return acc; }, {})
+    );
+
     let correct = 0;
-    const gradedAnswers = answers.map(({ questionIndex, selectedAnswer }) => {
+    const gradedAnswers = deduped.map(({ questionIndex, selectedAnswer }) => {
       const question = quiz.questions[questionIndex];
       if (!question) return { questionIndex, selectedAnswer, isCorrect: false };
 
@@ -63,16 +71,16 @@ exports.submitQuiz = async (req, res) => {
       return { questionIndex, selectedAnswer, isCorrect };
     });
 
-    const total = quiz.questions.length;
-    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const score = Math.round((correct / total) * 100);
     const passed = score >= PASS_THRESHOLD;
 
     const weakTopics = gradedAnswers
       .filter((a) => !a.isCorrect)
       .map(({ questionIndex }) => {
         const q = quiz.questions[questionIndex];
-        return q ? (q.topic || q.question || `Question ${questionIndex + 1}`) : `Question ${questionIndex + 1}`;
-      });
+        return q?.topic || null;
+      })
+      .filter(Boolean);
 
     let attempt = null;
     if (userId) {
@@ -93,7 +101,7 @@ exports.submitQuiz = async (req, res) => {
     }
 
     if (roadmapId && topicNode) {
-      await updateRoadmapNodeStatus(roadmapId, topicNode, passed);
+      await updateRoadmapNodeStatus(roadmapId, topicNode, passed, userId);
     }
 
     res.json({
@@ -115,7 +123,7 @@ exports.submitQuiz = async (req, res) => {
 exports.getAttempt = async (req, res) => {
   try {
     const { quizId } = req.params;
-    const userId = req.user._id;
+    const userId = req.user?._id || req.user?.userId;
 
     const attempt = await QuizAttempt.findOne({ user: userId, quiz: quizId }).populate('quiz');
     if (!attempt) return res.status(404).json({ message: 'No attempt found' });
@@ -127,24 +135,19 @@ exports.getAttempt = async (req, res) => {
 };
 
 
-async function updateRoadmapNodeStatus(roadmapId, topicNode, passed) {
-  try {
-    const status = passed ? 'green' : 'yellow';
-    const color = passed ? '#00C851' : '#ffbb33';
+async function updateRoadmapNodeStatus(roadmapId, topicNode, passed, userId) {
+  const status = passed ? 'green' : 'yellow';
+  const color = passed ? '#00C851' : '#ffbb33';
 
-    // Update in roadmap array (the step)
-    await Roadmap.updateOne(
-      { _id: roadmapId, 'roadmap._id': topicNode },
-      { $set: { 'roadmap.$.status': status } }
-    );
+  const ownerFilter = userId ? { _id: roadmapId, userId } : { _id: roadmapId };
 
-    // Update in graph.nodes array
-    await Roadmap.updateOne(
-      { _id: roadmapId, 'graph.nodes.id': topicNode },
-      { $set: { 'graph.nodes.$.status': status, 'graph.nodes.$.color': color } }
-    );
+  await Roadmap.updateOne(
+    { ...ownerFilter, 'roadmap._id': topicNode },
+    { $set: { 'roadmap.$.status': status } }
+  );
 
-  } catch (err) {
-    console.error('Failed to update roadmap node status:', err.message);
-  }
+  await Roadmap.updateOne(
+    { ...ownerFilter, 'graph.nodes.id': topicNode },
+    { $set: { 'graph.nodes.$.status': status, 'graph.nodes.$.color': color } }
+  );
 }
