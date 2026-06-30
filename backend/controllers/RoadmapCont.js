@@ -41,7 +41,7 @@ exports.createRoadmap = async (req, res) =>{
     roadmapData.topics.forEach(topic => {
       topic.subtopics.forEach(sub => {
         steps.push({
-          step: sub.name,
+          step: `${topic.name} – ${sub.name}`,
           status: "red",
           resources: sub.resources || []
         });
@@ -233,23 +233,57 @@ exports.updateRoadmapFromQuiz = async (req, res) => {
   }
 };
 
-// Helper to generate graph from roadmap array
+// Helper to generate tree graph from roadmap array
 const generateGraph = (roadmapArray) => {
-  const nodes = roadmapArray.map((step) => ({
-    id: step._id,
-    label: step.step,
-    status: step.status,
-    group: step.step.split('–')[0].trim(), // e.g., "Fundamentals"
-    color: step.status === 'red' ? '#ff4444' : step.status === 'yellow' ? '#ffaa00' : '#44ff44'
-  }));
-
+  const nodes = [];
   const edges = [];
-  for (let i = 0; i < roadmapArray.length - 1; i++) {
+  const topicMap = new Map(); // topic name → node id
+  const topicOrder = [];      // preserve topic insertion order
+
+  roadmapArray.forEach((step) => {
+    const parts = step.step.split('–');
+    const topicName = parts[0].trim();
+    const subtopicName = parts[1] ? parts[1].trim() : step.step;
+
+    // Create topic node once
+    if (!topicMap.has(topicName)) {
+      const topicId = `topic_${topicName.replace(/\s+/g, '_')}`;
+      topicMap.set(topicName, topicId);
+      topicOrder.push(topicName);
+      nodes.push({
+        id: topicId,
+        label: topicName,
+        type: 'topic',
+        color: '#4f8ef7'
+      });
+    }
+
+    // Create subtopic node
+    const subtopicId = step._id.toString();
+    nodes.push({
+      id: subtopicId,
+      label: subtopicName,
+      status: step.status,
+      color: step.status === 'red' ? '#ff4444' : step.status === 'yellow' ? '#ffaa00' : '#44ff44'
+    });
+
+    // Edge: topic → subtopic
     edges.push({
-      id: `e${i + 1}`,
-      source: roadmapArray[i]._id,
-      target: roadmapArray[i + 1]._id,
+      id: `e_${topicMap.get(topicName)}_${subtopicId}`,
+      source: topicMap.get(topicName),
+      target: subtopicId,
       type: 'step',
+      animated: false
+    });
+  });
+
+  // Edges between sequential topic nodes
+  for (let i = 0; i < topicOrder.length - 1; i++) {
+    edges.push({
+      id: `e_topic_${i}`,
+      source: topicMap.get(topicOrder[i]),
+      target: topicMap.get(topicOrder[i + 1]),
+      type: 'topic',
       animated: false
     });
   }

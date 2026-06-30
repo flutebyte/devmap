@@ -49,3 +49,4 @@ mongodb-data/
 # Temporary files
 tmp/
 temp/
+.gstack/
