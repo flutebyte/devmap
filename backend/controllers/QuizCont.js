@@ -134,6 +134,20 @@ exports.getAttempt = async (req, res) => {
   }
 };
 
+exports.getUserAttempts = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.user?.userId;
+
+    const attempts = await QuizAttempt.find({ user: userId })
+      .populate('quiz', 'topic difficulty')
+      .sort({ createdAt: -1 });
+
+    res.json({ status: 'success', attempts });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 
 async function updateRoadmapNodeStatus(roadmapId, topicNode, passed, userId) {
   const status = passed ? 'green' : 'yellow';

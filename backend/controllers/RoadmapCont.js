@@ -4,21 +4,19 @@ const Roadmap = require('../models/Roadmap');
 exports.createRoadmap = async (req, res) =>{
     try {
     const { topic, level, learningTime } = req.body;
+    const userId = req.user?.userId;
+
+    // Return existing roadmap if same params already generated
+    const existing = await Roadmap.findOne({ userId, topic, level, learningTime });
+    if (existing) {
+      const graph = generateGraph(existing.roadmap);
+      return res.json({ status: "success", roadmap: { ...existing.toObject(), graph } });
+    }
 
     const prompt = `
-    Create a learning roadmap for:
-
     Topic: ${topic}
     Level: ${level}
     Learning Time Available: ${learningTime}
-
-    Structure the roadmap into:
-    Fundamentals
-    Core Concepts
-    Tools & Frameworks
-    Projects
-    Advanced Topics
-    Career Preparation
     `;
     const roadmap = await askAIML(prompt);
 
@@ -49,7 +47,7 @@ exports.createRoadmap = async (req, res) =>{
     });
 
     const savedRoadmap = await Roadmap.create({
-      userId: req.user?.userId || "64b000000000000000000001", 
+      userId,
       topic,
       level,
       learningTime,

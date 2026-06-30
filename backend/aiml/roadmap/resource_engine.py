@@ -8,6 +8,9 @@ def attach_resources(roadmap):
 
         for sub in topic.get("subtopics", []):
 
+            if isinstance(sub, str):
+                sub = {"name": sub}
+
             query = sub.get("name", "")
 
             video = get_best_video(query)

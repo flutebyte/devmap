@@ -16,7 +16,7 @@ import {
   MiniMap
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { fetchRoadmapByTopic, updateRoadmapStep } from "../services/roadmapApi";
+import { fetchRoadmapByTopic, fetchRoadmapById, updateRoadmapStep } from "../services/roadmapApi";
 
 function Roadmap() {
   const { topic } = useParams();
@@ -25,6 +25,7 @@ function Roadmap() {
 
   const level = searchParams.get("level") || "Beginner";
   const duration = searchParams.get("duration") || "3 Months";
+  const existingId = searchParams.get("existing");
 
   const [roadmapData, setRoadmapData] = useState(null);
   const [selectedStep, setSelectedStep] = useState(null);
@@ -59,7 +60,10 @@ function Roadmap() {
         setLoading(true);
         setError("");
 
-        const data = await fetchRoadmapByTopic(topic, level, duration);
+        const data = existingId
+          ? await fetchRoadmapById(existingId)
+          : await fetchRoadmapByTopic(topic, level, duration);
+
         setRoadmapData(data.roadmap);
 
         if (data.roadmap?.roadmap?.length > 0) {
@@ -73,10 +77,10 @@ function Roadmap() {
       }
     };
 
-    if (topic) {
+    if (topic || existingId) {
       getRoadmap();
     }
-  }, [topic, level, duration]);
+  }, [topic, level, duration, existingId]);
 
   const handleStatusChange = async (step, newStatus) => {
     try {
@@ -121,50 +125,105 @@ function Roadmap() {
     return Math.round((completed / roadmapData.roadmap.length) * 100);
   };
 
-  const flowNodes = useMemo(() => {
-    if (!roadmapData?.roadmap) return [];
+  const { flowNodes, flowEdges } = useMemo(() => {
+    if (!roadmapData?.graph) return { flowNodes: [], flowEdges: [] };
 
-    return roadmapData.roadmap.map((item, index) => ({
-      id: `${index + 1}`,
-      position: { x: index % 2 === 0 ? 100 : 450, y: index * 130 },
-      data: {
-        label: (
-          <div className="text-center">
-            <p className="font-semibold text-sm">{item.step}</p>
-          </div>
-        )
-      },
-      style: {
-        background: "#fff",
-        border: `3px solid ${getNodeColor(item.status)}`,
-        borderRadius: "16px",
-        padding: "12px 18px",
-        width: 220,
-        fontSize: "14px",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-        cursor: "pointer"
+    const backendNodes = roadmapData.graph.nodes;
+    const backendEdges = roadmapData.graph.edges;
+    const topicNodes = backendNodes.filter(n => n.type === "topic");
+
+    // Map each topic to its subtopic children
+    const childMap = {};
+    backendEdges.forEach(e => {
+      const src = backendNodes.find(n => n.id === e.source);
+      if (src?.type === "topic") {
+        const tgt = backendNodes.find(n => n.id === e.target);
+        if (tgt && tgt.type !== "topic") {
+          if (!childMap[e.source]) childMap[e.source] = [];
+          childMap[e.source].push(e.target);
+        }
       }
-    }));
-  }, [roadmapData]);
+    });
 
-  const flowEdges = useMemo(() => {
-    if (!roadmapData?.roadmap) return [];
+    const TOPIC_W = 280;
+    const SUB_W = 200;
+    const SUB_H = 60;
+    const H_GAP = 18;
+    const COLS = 3;
+    const CENTER_X = 450;
+    let y = 0;
 
-    return roadmapData.roadmap.slice(0, -1).map((_, index) => ({
-      id: `e${index + 1}-${index + 2}`,
-      source: `${index + 1}`,
-      target: `${index + 2}`,
-      animated: true,
-      style: {
-        stroke: "#2563eb",
-        strokeWidth: 2
-      }
+    const positioned = [];
+
+    topicNodes.forEach(t => {
+      positioned.push({
+        id: t.id,
+        position: { x: CENTER_X - TOPIC_W / 2, y },
+        data: { label: t.label },
+        style: {
+          background: "#1e3a8a",
+          color: "white",
+          borderRadius: "10px",
+          fontWeight: 700,
+          width: TOPIC_W,
+          padding: "12px 20px",
+          fontSize: "15px",
+          border: "none",
+          boxShadow: "0 4px 12px rgba(30,58,138,0.25)",
+        },
+      });
+      y += 62 + 40;
+
+      const subs = childMap[t.id] || [];
+      const rows = [];
+      for (let i = 0; i < subs.length; i += COLS) rows.push(subs.slice(i, i + COLS));
+
+      rows.forEach(row => {
+        const totalW = row.length * (SUB_W + H_GAP) - H_GAP;
+        const startX = CENTER_X - totalW / 2;
+
+        row.forEach((childId, i) => {
+          const child = backendNodes.find(n => n.id === childId);
+          if (!child) return;
+
+          const bg = child.color === "#ff4444" ? "#fee2e2"
+                   : child.color === "#ffaa00" ? "#fef3c7"
+                   : "#dcfce7";
+
+          positioned.push({
+            id: child.id,
+            position: { x: startX + i * (SUB_W + H_GAP), y },
+            data: { label: child.label },
+            style: {
+              background: bg,
+              border: `2px solid ${child.color || "#94a3b8"}`,
+              borderRadius: "8px",
+              width: SUB_W,
+              padding: "10px 14px",
+              fontSize: "13px",
+              cursor: "pointer",
+              minHeight: `${SUB_H}px`,
+            },
+          });
+        });
+        y += SUB_H + 16;
+      });
+
+      y += 48;
+    });
+
+    const edges = backendEdges.map(e => ({
+      ...e,
+      animated: false,
+      style: { stroke: "#cbd5e1", strokeWidth: 1.5 },
     }));
+
+    return { flowNodes: positioned, flowEdges: edges };
   }, [roadmapData]);
 
   const handleNodeClick = (_, node) => {
-    const index = Number(node.id) - 1;
-    setSelectedStep(roadmapData.roadmap[index]);
+    const step = roadmapData.roadmap.find(s => s._id?.toString() === node.id);
+    if (step) setSelectedStep(step);
   };
 
   if (loading) {
@@ -207,11 +266,11 @@ function Roadmap() {
       <div className="max-w-7xl mx-auto">
         {/* Back */}
         <button
-          onClick={() => navigate("/dashboard")}
+          onClick={() => navigate(existingId ? "/dashboard?tab=roadmaps" : "/dashboard")}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium mb-6 transition"
         >
           <FaArrowLeft />
-          Back to Search
+          {existingId ? "Back to My Roadmaps" : "Back to Dashboard"}
         </button>
 
         {error ? (
@@ -269,6 +328,7 @@ function Roadmap() {
                     nodes={flowNodes}
                     edges={flowEdges}
                     fitView
+                    fitViewOptions={{ padding: 0.2 }}
                     onNodeClick={handleNodeClick}
                   >
                     <MiniMap />
@@ -299,7 +359,7 @@ function Roadmap() {
                     </span>
 
                     {/* Buttons */}
-                    <div className="flex flex-col gap-3 mb-6">
+                    <div className="flex flex-col gap-3 mb-4">
                       <button
                         onClick={() =>
                           handleStatusChange(selectedStep.step, "red")
@@ -319,16 +379,11 @@ function Roadmap() {
                         <FaClock />
                         In Progress
                       </button>
+                    </div>
 
-                      <button
-                        onClick={() =>
-                          handleStatusChange(selectedStep.step, "green")
-                        }
-                        className="px-4 py-3 rounded-xl bg-green-100 text-green-700 hover:bg-green-200 text-sm font-medium flex items-center justify-center gap-2 transition"
-                      >
-                        <FaCheckCircle />
-                        Completed
-                      </button>
+                    <div className="flex items-center gap-2 text-xs text-gray-400 mb-6 bg-gray-50 rounded-xl px-4 py-3">
+                      <FaCheckCircle className="text-green-400 shrink-0" />
+                      Complete the quiz on this topic to mark it as done
                     </div>
 
                     {/* Take Quiz */}
@@ -358,6 +413,11 @@ function Roadmap() {
                               href={resource.link}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => {
+                                if (selectedStep.status === "red") {
+                                  handleStatusChange(selectedStep.step, "yellow");
+                                }
+                              }}
                               className="block bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-4 transition"
                             >
                               <div className="flex items-center gap-3 mb-2">

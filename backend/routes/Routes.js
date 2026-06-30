@@ -3,12 +3,12 @@ const router = express.Router();
 const { login, signup } = require('../controllers/UserCont');
 const { authenticate } = require("../middlewares/auth");
 const { createRoadmap, getRoadmaps, getRoadmapById, updateRoadmap, updateRoadmapFromQuiz, deleteRoadmap } = require('../controllers/RoadmapCont');
-const { generateQuiz, submitQuiz, getAttempt } = require('../controllers/QuizCont');
+const { generateQuiz, submitQuiz, getAttempt, getUserAttempts } = require('../controllers/QuizCont');
 
 router.post('/login', login);
 router.post('/signup', signup);
 
-router.post("/roadmaps", createRoadmap);
+router.post("/roadmaps", authenticate, createRoadmap);
 router.get("/roadmaps", authenticate, getRoadmaps);
 router.get("/roadmaps/:id", authenticate, getRoadmapById);
 router.put("/roadmaps/:id", authenticate, updateRoadmap);
@@ -17,6 +17,7 @@ router.post('/:id/quiz-update', authenticate, updateRoadmapFromQuiz);
 
 router.post('/quizzes', generateQuiz);
 router.post('/quizzes/:id/submit', authenticate, submitQuiz);
+router.get('/quizzes/attempts', authenticate, getUserAttempts);
 router.get('/quizzes/:quizId/attempt', authenticate, getAttempt);
 
 
